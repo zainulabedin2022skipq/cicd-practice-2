@@ -1,3 +1,7 @@
+# ══════════════════════════════════════════════════════════════════════
+#  CD — deploys to staging, then to production behind an approval gate.
+#  Triggered by CI finishing successfully on main.
+# ══════════════════════════════════════════════════════════════════════
 name: CD
 
 on:
@@ -8,6 +12,7 @@ on:
   workflow_dispatch:
 
 jobs:
+  # ── STAGING: automatic ─────────────────────────────────────────────
   deploy-staging:
     name: Deploy to staging
     runs-on: ubuntu-latest
@@ -20,14 +25,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Build a REAL zip file. Passing a directory caused EISDIR before,
+      # because the action tried to read "." as if it were an archive.
+      # The unzip -l listing proves app.py is at the top level BEFORE
+      # Azure ever sees the package.
+      - name: Create deployment zip
+        run: |
+          zip -r deploy.zip . -x ".git/*" ".github/*" "tests/*" "*.pyc" "__pycache__/*"
+          echo "--- contents of deploy.zip ---"
+          unzip -l deploy.zip
+
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ vars.STAGING_APP_NAME }}
           publish-profile: ${{ secrets.AZURE_STAGING_PUBLISH_PROFILE }}
-          package: .
-          type: zip
+          package: deploy.zip
 
+      # ── SMOKE TEST ──────────────────────────────────────────────────
+      # Deploying is not the same as working. This proves the live site
+      # actually responds before we call the deploy a success.
       - name: Smoke test /health
         run: |
           URL="https://${{ vars.STAGING_APP_NAME }}.azurewebsites.net/health"
@@ -45,10 +62,13 @@ jobs:
           echo "SMOKE TEST FAILED - staging did not become healthy"
           exit 1
 
+  # ── PRODUCTION: gated ──────────────────────────────────────────────
+  # Identical steps, but the 'production' GitHub Environment has a
+  # required reviewer, so this job PAUSES until a human approves.
   deploy-production:
     name: Deploy to production
     runs-on: ubuntu-latest
-    needs: deploy-staging
+    needs: deploy-staging          # staging must pass its smoke test first
 
     environment:
       name: production
@@ -57,13 +77,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create deployment zip
+        run: |
+          zip -r deploy.zip . -x ".git/*" ".github/*" "tests/*" "*.pyc" "__pycache__/*"
+          echo "--- contents of deploy.zip ---"
+          unzip -l deploy.zip
+
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ vars.PRODUCTION_APP_NAME }}
           publish-profile: ${{ secrets.AZURE_PRODUCTION_PUBLISH_PROFILE }}
-          package: .
-          type: zip
+          package: deploy.zip
 
       - name: Smoke test /health
         run: |
