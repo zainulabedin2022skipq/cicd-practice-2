@@ -20,7 +20,7 @@ def test_health_reports_ok(client):
 
 
 @pytest.mark.parametrize("a,b,expected", [
-    (2, 3, 99),
+    (2, 3, 5),
     (0, 0, 0),
     (10, 90, 100),
 ])
