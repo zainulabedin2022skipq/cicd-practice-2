@@ -19,7 +19,7 @@ ENVIRONMENT = os.environ.get("APP_ENVIRONMENT", "local")
 def home():
     return f"""
     <html><body style="font-family: system-ui; padding: 3rem; text-align:center">
-      <h1>CI/CD Practice App</h1>
+      <h1>CI/CD Practice App - deployed from GitHub Actions</h1>
       <p>Environment: <strong>{ENVIRONMENT}</strong></p>
       <p>Version: <strong>{VERSION}</strong></p>
     </body></html>
